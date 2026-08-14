@@ -13,7 +13,7 @@ import {
 } from "./parse.js";
 
 const name = "claude-import";
-const inject = ["tools"];
+const inject = ["tools", "apiProxy"];
 
 const Config = z.object({});
 
@@ -215,7 +215,7 @@ function apply(ctx) {
 
   ctx.tools.register(defineTool({
     name: "claude_session_import",
-    description: "导入一个 Claude Code 会话为可续接上下文:提取 AI 标题、自动摘要链(summary)、last-prompt 最后任务、动过的文件(Write/Edit/Read)与尾部状态。format=seed 输出适合粘贴为新会话开场上下文的文本块;format=markdown 输出完整续接文档。拿到结果后把文本纳入本会话上下文继续工作。",
+    description: "导入一个 Claude Code 会话为可续接上下文:提取 AI 标题、自动摘要链(summary)、last-prompt 最后任务、动过的文件(Write/Edit/Read)与尾部状态。format=seed 输出适合粘贴为新会话开场上下文的文本块;format=markdown 输出完整续接文档。createSession=true 时,在 Claude 会话所属项目目录下新建一个 DSH 会话并把上下文作为首条消息投递过去(返回 newSessionId)。",
     parameters: {
       sessionId: {
         type: "string",
@@ -227,6 +227,10 @@ function apply(ctx) {
         enum: ["seed", "markdown"],
         description: "输出格式:seed(开场上下文块,默认)或 markdown(完整续接文档)",
       },
+      createSession: {
+        type: "boolean",
+        description: "true 时在 Claude 会话所属项目目录下新建 DSH 会话并把上下文作为首条消息投递(默认 false,仅返回上下文文本)",
+      },
     },
     output: {
       schema: {
@@ -237,6 +241,9 @@ function apply(ctx) {
           project: { type: "string", required: true },
           format: { type: "string", required: true },
           text: { type: "string", required: true },
+          newSessionId: { type: "string" },
+          sessionCreated: { type: "boolean" },
+          promptDelivered: { type: "boolean" },
           stats: {
             type: "object",
             additionalProperties: false,
@@ -253,7 +260,9 @@ function apply(ctx) {
       },
       render: (args, value) => [{
         type: "text",
-        text: `已导入 Claude Code 会话 "${value.title}"(${value.project}),格式 ${value.format}。`,
+        text: value.sessionCreated
+          ? `已导入 Claude Code 会话 "${value.title}" 并新建 DSH 会话 ${value.newSessionId}(项目:${value.project})。`
+          : `已导入 Claude Code 会话 "${value.title}"(${value.project}),格式 ${value.format}。`,
       }],
     },
     execute: async (args) => {
@@ -266,7 +275,7 @@ function apply(ctx) {
       const info = parseSession(file);
       const format = args.format || "seed";
       const text = format === "markdown" ? renderMarkdown(info) : renderSeed(info);
-      return {
+      const result = {
         title: info.title,
         project: info.projectDir,
         format,
@@ -279,6 +288,34 @@ function apply(ctx) {
           summaries: info.summaries.length,
         },
       };
+      if (args.createSession) {
+        // Official session-create path: the new session lives in the Claude
+        // project directory (workspace resolution happens inside the API).
+        const api = ctx.apiProxy;
+        const created = await api.sessions.create({ cwd: info.projectDir });
+        if (!created.ok) {
+          throw new Error(
+            `创建新会话失败(项目 ${info.projectDir}):${created.error ? created.error.message : "未知错误"}`
+          );
+        }
+        const newId = created.value.sessionId;
+        // Deliver the continuable context as the new session's first message.
+        let delivered = false;
+        try {
+          const prompted = await api.sessions.prompt({
+            sessionId: newId,
+            mode: "queue",
+            content: [{ type: "text", text }],
+          });
+          delivered = !!(prompted && prompted.ok);
+        } catch (e) {
+          delivered = false;
+        }
+        result.newSessionId = newId;
+        result.sessionCreated = true;
+        result.promptDelivered = delivered;
+      }
+      return result;
     },
     presentCall: (args) => ({
       card: "generic",

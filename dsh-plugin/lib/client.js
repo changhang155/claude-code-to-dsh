@@ -25,57 +25,77 @@ window.__ModuleLoader__.load({
         "请从 Claude Code 导入会话" +
         (query ? " " + query : "(最近一个)") +
         ":\n1. 先调用 claude_session_list 查看历史会话,确认目标会话 ID(已指定则跳过);\n" +
-        "2. 再调用 claude_session_import 导入(sessionId=..., format=seed);\n" +
-        "3. 把返回的续接上下文纳入本会话工作背景,并汇报:会话标题、项目、动过的文件、可能的未完成事项。"
+        "2. 再调用 claude_session_import 导入(sessionId=..., format=seed, createSession=true),在 Claude 会话所属项目目录下新建 DSH 会话;\n" +
+        "3. 导入完成后告知新会话的 ID、项目目录,以及 Claude 会话的标题、动过的文件和可能的未完成事项。"
       );
     }
 
-    /** Try to deliver text into a session via its conversation service. */
-    async function deliverToSession(sessions, id, text, attempts) {
-      for (var i = 0; i < attempts; i++) {
-        try {
-          var actx = sessions.scope(id);
-          if (actx !== void 0) {
-            var conversation = actx.get("conversation");
-            if (conversation !== void 0) {
-              await conversation.send(text);
-              return true;
-            }
+    /** Poll the session list until a session that did not exist before appears. */
+    function pollNewSession(knownIds, timeoutMs, onFound, onTimeout) {
+      var start = Date.now();
+      var timer = setInterval(function () {
+        var list = _ctx.sessions.list.getSnapshot();
+        var ids = list.ids || Object.keys(list.byId || {});
+        for (var i = 0; i < ids.length; i++) {
+          if (!knownIds.has(ids[i])) {
+            clearInterval(timer);
+            onFound(ids[i]);
+            return;
           }
-        } catch (e) {
-          // session not attached yet — retry below
         }
-        await new Promise(function (resolve) {
-          setTimeout(resolve, 400);
-        });
-      }
-      return false;
+        if (Date.now() - start > timeoutMs) {
+          clearInterval(timer);
+          onTimeout();
+        }
+      }, 500);
     }
 
-    /** Create a new blank DSH session (same workspace), open it, deliver the instruction. */
+    /**
+     * Request a project-scoped import: tell the current session's agent to run
+     * claude_session_import with createSession=true (the host tool creates the
+     * new DSH session in the Claude project directory and delivers the context),
+     * then poll the session list and open the new session when it appears.
+     */
     async function doImport(query) {
       var sessions = _ctx.sessions;
-      var workspaces = _ctx.workspaces;
-      var newId;
+      var knownIds = new Set();
       try {
-        // Official New Session flow: connectWorkspace returns the blank session id.
-        var wsList = workspaces.list.getSnapshot();
-        var wsId = wsList.recentWorkspaceId;
-        if (wsId === void 0 && wsList.items && wsList.items.length > 0) {
-          wsId = wsList.items[0].workspaceId;
-        }
-        if (wsId === void 0) {
-          return { ok: false, error: { code: "no-workspace", message: "没有可用的工作区,请先打开一个会话再导入", details: {} } };
-        }
-        newId = await workspaces.connectWorkspace(wsId);
+        var snap = sessions.list.getSnapshot();
+        (snap.ids || []).forEach(function (id) {
+          knownIds.add(id);
+        });
       } catch (e) {
-        var msg = e && e.message ? e.message : String(e);
-        return { ok: false, error: { code: "session-create-failed", message: "创建新会话失败:" + msg, details: {} } };
+        // empty baseline; poll everything as new
       }
-      sessions.open(newId);
-      // deliver the import instruction into the new session
-      var delivered = await deliverToSession(sessions, newId, importPromptText(query), 12);
-      return { ok: true, value: { sessionId: newId, delivered: delivered } };
+      var currentId;
+      try {
+        currentId = sessions.list.getSnapshot().current;
+      } catch (e) {
+        currentId = void 0;
+      }
+      var actx = currentId === void 0 ? void 0 : sessions.scope(currentId);
+      var conversation = actx === void 0 ? void 0 : actx.get("conversation");
+      if (!conversation) {
+        return { ok: false, error: { code: "no-conversation", message: "当前会话的 conversation 服务不可用", details: {} } };
+      }
+      try {
+        await conversation.send(importPromptText(query));
+      } catch (e) {
+        return { ok: false, error: { code: "send-failed", message: "指令投递失败:" + (e && e.message ? e.message : String(e)), details: {} } };
+      }
+      // wait for the host-created session to appear, then open it
+      return await new Promise(function (resolve) {
+        pollNewSession(knownIds, 30000, function (newId) {
+          try {
+            sessions.open(newId);
+          } catch (e) {
+            // ignore open failures; the session is still listed
+          }
+          resolve({ ok: true, value: { sessionId: newId, delivered: true } });
+        }, function () {
+          resolve({ ok: true, value: { sessionId: null, delivered: false } });
+        });
+      });
     }
 
     // ── top-right action button (matches Session log's sessionLogButton) ──
@@ -213,13 +233,11 @@ window.__ModuleLoader__.load({
                   ? String(result.value.sessionId).slice(0, 8)
                   : "";
               if (result.value && result.value.delivered) {
-                setStatus({ ok: true, text: "已创建新会话 " + shortId + " 并投递导入指令,正在导入…" });
+                setStatus({ ok: true, text: "已创建新会话 " + shortId + " 并投递上下文,正在导入…" });
               } else {
                 setStatus({
                   ok: false,
-                  text:
-                    "已创建新会话 " + shortId + ",但指令投递失败。请在新会话输入框发送:从 Claude Code 导入会话" +
-                    (query.trim() ? " " + query.trim() : "(最近一个)"),
+                  text: "等待新会话超时(30 秒)。agent 应已在对话中汇报新会话 ID,请从会话列表手动切换;若 agent 报错,请把错误信息发我。",
                 });
               }
             } else {
@@ -351,7 +369,7 @@ window.__ModuleLoader__.load({
 
     exports.ClaudeImportAction = ClaudeImportAction;
     exports.ClaudeImportPanel = ClaudeImportPanel;
-    exports.inject = ["slots", "sessions", "workspaces"];
+    exports.inject = ["slots", "sessions"];
     exports.apply = apply;
     return module.exports;
   },
