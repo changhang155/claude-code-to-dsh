@@ -11,6 +11,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     var React = require("react");
+    var primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+    var IconFolderOpen = primitives.IconFolderOpenOutline16;
 
     var NS = "dsh-plugin-claude-import";
 
@@ -78,20 +80,24 @@ window.__ModuleLoader__.load({
       return { ok: true, value: { sessionId: newId, delivered: delivered } };
     }
 
-    // ── top-right action button ──────────────────────────────────────────
+    // ── top-right action button (matches Session log's sessionLogButton) ──
     var actionStyle = {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      height: 28,
-      padding: "0 10px",
-      borderRadius: 999,
       border: "1px solid var(--dsw-alias-border-l2)",
-      background: "transparent",
-      color: "var(--dsw-alias-label-secondary)",
+      minWidth: 111,
+      height: 32,
+      color: "var(--dsw-alias-label-primary)",
+      fontFamily: "var(--dsw-font-family)",
       cursor: "pointer",
+      background: "0 0",
+      borderRadius: 18,
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 4,
+      padding: "6px 12px",
       fontSize: 13,
-      fontWeight: 500,
+      fontWeight: 400,
+      lineHeight: "20px",
+      display: "inline-flex",
       whiteSpace: "nowrap",
     };
 
@@ -297,13 +303,14 @@ window.__ModuleLoader__.load({
             "button",
             {
               type: "button",
-              style: Object.assign({}, actionStyle, open ? { background: "var(--dsw-alias-interactive-bg-hover)", color: "var(--dsw-alias-label-primary)" } : {}),
+              style: Object.assign({}, actionStyle, open ? { background: "var(--dsw-alias-interactive-bg-hover)" } : {}),
               onClick: function () {
                 setOpen(!open);
               },
               title: "从 Claude Code 导入会话到新 DSH 会话",
             },
-            "Claude 导入"
+            React.createElement("span", null, "Claude 导入"),
+            React.createElement(IconFolderOpen, { size: 12 })
           ),
           open &&
             React.createElement(ClaudeImportPanel, {
