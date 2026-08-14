@@ -327,7 +327,7 @@ window.__ModuleLoader__.load({
           tag.dataset.plugin = "dsh-plugin-claude-import";
           tag.dataset.pluginCss = tagId;
           tag.textContent =
-            '[class*="_headerUtilities"]{flex-wrap:wrap;row-gap:4px}' +
+            '[class*="_headerUtilities"]{flex-wrap:wrap;row-gap:4px;justify-content:flex-end}' +
             '[class*="_headerUtilities"]>[data-claude-import]{min-width:0}';
           document.head.appendChild(tag);
         }
