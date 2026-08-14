@@ -201,6 +201,7 @@ function apply(ctx) {
       }],
     },
     execute: async (args) => {
+      console.log(`[claude-import] claude_session_list called`, JSON.stringify(args));
       const files = listSessionFiles(args.projectsRoot || undefined);
       const sessions = files.map((f) => sessionSummary(parseSession(f.path, f.projectKey)));
       return { count: sessions.length, sessions };
@@ -267,6 +268,7 @@ function apply(ctx) {
       }],
     },
     execute: async (args) => {
+      console.log(`[claude-import] claude_session_import called`, JSON.stringify(args));
       const file = resolveSessionFile(args.sessionId);
       if (!file) {
         throw new Error(
