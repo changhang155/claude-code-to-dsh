@@ -281,38 +281,64 @@ window.__ModuleLoader__.load({
     function ClaudeImportAction() {
       var useState = React.useState;
       var [open, setOpen] = useState(false);
+      // flex-basis:100% inside a wrap-enabled utilities row forces this item
+      // onto its own second line, right-aligned — directly below the
+      // "Session log" button in the top-right corner.
       return React.createElement(
         "div",
-        { style: anchorStyle },
+        {
+          "data-claude-import": "true",
+          style: { flexBasis: "100%", display: "flex", justifyContent: "flex-end" },
+        },
         React.createElement(
-          "button",
-          {
-            type: "button",
-            style: Object.assign({}, actionStyle, open ? { background: "var(--dsw-alias-interactive-bg-hover)", color: "var(--dsw-alias-label-primary)" } : {}),
-            onClick: function () {
-              setOpen(!open);
+          "div",
+          { style: anchorStyle },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              style: Object.assign({}, actionStyle, open ? { background: "var(--dsw-alias-interactive-bg-hover)", color: "var(--dsw-alias-label-primary)" } : {}),
+              onClick: function () {
+                setOpen(!open);
+              },
+              title: "从 Claude Code 导入会话到新 DSH 会话",
             },
-            title: "从 Claude Code 导入会话到新 DSH 会话",
-          },
-          "Claude 导入"
-        ),
-        open &&
-          React.createElement(ClaudeImportPanel, {
-            onClose: function () {
-              setOpen(false);
-            },
-          })
+            "Claude 导入"
+          ),
+          open &&
+            React.createElement(ClaudeImportPanel, {
+              onClose: function () {
+                setOpen(false);
+              },
+            })
+        )
       );
     }
 
     function apply(ctx) {
       _ctx = ctx;
       if (!ctx.slots || !ctx.sessions) return;
-      ctx.slots.inject("conversation.session.header.actions", function () {
+      // Make the header utilities row wrap so this plugin can sit on a second
+      // line below the Session log button (scoped to the stable class suffix).
+      try {
+        var tagId = "dsh-plugin-claude-import/header-wrap";
+        if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
+          var tag = document.createElement("style");
+          tag.dataset.plugin = "dsh-plugin-claude-import";
+          tag.dataset.pluginCss = tagId;
+          tag.textContent =
+            '[class*="_headerUtilities"]{flex-wrap:wrap;row-gap:4px}' +
+            '[class*="_headerUtilities"]>[data-claude-import]{min-width:0}';
+          document.head.appendChild(tag);
+        }
+      } catch (e) {
+        // style injection is best-effort; the button still renders inline
+      }
+      ctx.slots.inject("conversation.session.header.utilities", function () {
         return ctx.slots.register({
-          name: "conversation.session.header.actions",
+          name: "conversation.session.header.utilities",
           id: "claude-import",
-          order: 50,
+          order: 10,
           locale: NS,
         }, ClaudeImportAction);
       });
