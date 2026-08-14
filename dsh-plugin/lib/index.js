@@ -242,6 +242,7 @@ function apply(ctx) {
           format: { type: "string", required: true },
           text: { type: "string", required: true },
           newSessionId: { type: "string" },
+          workspaceId: { type: "string" },
           sessionCreated: { type: "boolean" },
           promptDelivered: { type: "boolean" },
           stats: {
@@ -289,10 +290,17 @@ function apply(ctx) {
         },
       };
       if (args.createSession) {
-        // Official session-create path: the new session lives in the Claude
-        // project directory (workspace resolution happens inside the API).
+        // Ensure the Claude project exists as a workspace, then create the new
+        // session inside it — that is what makes the project appear on the left.
         const api = ctx.apiProxy;
-        const created = await api.sessions.create({ cwd: info.projectDir });
+        const ws = await api.workspace.create({ path: info.projectDir });
+        if (!ws.ok) {
+          throw new Error(
+            `创建工作区失败(${info.projectDir}):${ws.error ? ws.error.message : "未知错误"}`
+          );
+        }
+        const workspaceId = ws.value.workspace.workspaceId;
+        const created = await api.sessions.create({ workspaceId });
         if (!created.ok) {
           throw new Error(
             `创建新会话失败(项目 ${info.projectDir}):${created.error ? created.error.message : "未知错误"}`
@@ -314,6 +322,7 @@ function apply(ctx) {
         result.newSessionId = newId;
         result.sessionCreated = true;
         result.promptDelivered = delivered;
+        result.workspaceId = workspaceId;
       }
       return result;
     },
