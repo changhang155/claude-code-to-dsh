@@ -52,30 +52,28 @@ window.__ModuleLoader__.load({
       return false;
     }
 
-    /** Create a new blank DSH session (same cwd), open it, deliver the instruction. */
+    /** Create a new blank DSH session (same workspace), open it, deliver the instruction. */
     async function doImport(query) {
       var sessions = _ctx.sessions;
-      // 1. current session's cwd becomes the new session's project dir
-      var cwd;
+      var workspaces = _ctx.workspaces;
+      var newId;
       try {
-        var list = sessions.list.getSnapshot();
-        var currentId = list.current;
-        if (currentId !== void 0 && list.byId) {
-          var summary = list.byId[currentId];
-          if (summary !== void 0) cwd = summary.cwd;
+        // Official New Session flow: connectWorkspace returns the blank session id.
+        var wsList = workspaces.list.getSnapshot();
+        var wsId = wsList.recentWorkspaceId;
+        if (wsId === void 0 && wsList.items && wsList.items.length > 0) {
+          wsId = wsList.items[0].workspaceId;
         }
+        if (wsId === void 0) {
+          return { ok: false, error: { code: "no-workspace", message: "没有可用的工作区,请先打开一个会话再导入", details: {} } };
+        }
+        newId = await workspaces.connectWorkspace(wsId);
       } catch (e) {
-        cwd = void 0;
-      }
-      // 2. create a NEW DSH session (blank), then open it
-      var createResult = await sessions.create(cwd === void 0 ? {} : { cwd: cwd });
-      if (!createResult || !createResult.ok) {
-        var msg = createResult && createResult.error ? createResult.error.message : "未知错误";
+        var msg = e && e.message ? e.message : String(e);
         return { ok: false, error: { code: "session-create-failed", message: "创建新会话失败:" + msg, details: {} } };
       }
-      var newId = createResult.value.sessionId;
       sessions.open(newId);
-      // 3. deliver the import instruction into the new session
+      // deliver the import instruction into the new session
       var delivered = await deliverToSession(sessions, newId, importPromptText(query), 12);
       return { ok: true, value: { sessionId: newId, delivered: delivered } };
     }
@@ -353,7 +351,7 @@ window.__ModuleLoader__.load({
 
     exports.ClaudeImportAction = ClaudeImportAction;
     exports.ClaudeImportPanel = ClaudeImportPanel;
-    exports.inject = ["slots", "sessions"];
+    exports.inject = ["slots", "sessions", "workspaces"];
     exports.apply = apply;
     return module.exports;
   },
