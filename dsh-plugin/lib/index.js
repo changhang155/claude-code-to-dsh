@@ -220,7 +220,7 @@ function apply(ctx) {
       sessionId: {
         type: "string",
         required: true,
-        description: "会话 ID 前缀(8 位,来自 claude_session_list)或完整 .jsonl 路径",
+        description: "8 位前缀或完整会话 ID(来自 claude_session_list),或完整 .jsonl 路径",
       },
       format: {
         type: "string",

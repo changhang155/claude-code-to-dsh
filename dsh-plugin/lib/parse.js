@@ -262,12 +262,23 @@ export function decodeProjectKey(key) {
   return best ? best[1] : "/" + segs.join("/");
 }
 
-/** Resolve a session-id prefix or jsonl path to a file. */
+/** Resolve a session-id (8-char prefix or full id) or jsonl path to a file. */
 export function resolveSessionFile(sessionId, projectsRoot = defaultProjectsRoot()) {
   if (existsSync(sessionId)) return sessionId;
-  for (const f of listSessionFiles(projectsRoot)) {
+  const files = listSessionFiles(projectsRoot);
+  const id = String(sessionId);
+  // exact full-id match first
+  for (const f of files) {
+    if (path.basename(f.path) === id + ".jsonl") return f.path;
+  }
+  // then 8-char prefix, then any prefix (first match wins)
+  for (const f of files) {
     const base = path.basename(f.path);
-    if (base.startsWith(sessionId) || base.slice(0, 8) === sessionId) return f.path;
+    if (base.slice(0, 8) === id) return f.path;
+  }
+  for (const f of files) {
+    const base = path.basename(f.path);
+    if (base.startsWith(id)) return f.path;
   }
   return null;
 }

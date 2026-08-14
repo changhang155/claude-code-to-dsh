@@ -247,7 +247,7 @@ window.__ModuleLoader__.load({
           {
             style: inputStyle,
             value: query,
-            placeholder: "会话 ID(留空 = 最近一个)",
+            placeholder: "会话 ID(8 位前缀或完整 ID,留空 = 最近一个)",
             disabled: pending,
             autoFocus: true,
             onChange: function (e) {
