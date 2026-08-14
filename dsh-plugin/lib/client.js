@@ -77,7 +77,12 @@ window.__ModuleLoader__.load({
         Promise.resolve(onImport(query.trim()))
           .then((result) => {
             if (result && result.ok) {
-              setStatus({ ok: true, text: "已提交,agent 正在处理导入…" });
+              var shortId = result.value && result.value.sessionId ? String(result.value.sessionId).slice(0, 8) : "";
+              if (result.value && result.value.delivered) {
+                setStatus({ ok: true, text: "已创建新会话 " + shortId + " 并投递导入指令" });
+              } else {
+                setStatus({ ok: false, text: "已创建新会话 " + shortId + ",但指令投递失败——请在新会话输入框发送:从 Claude Code 导入会话" + (query.trim() ? " " + query.trim() : "(最近一个)") });
+              }
             } else {
               var msg = result && result.error ? result.error.message : "未知错误";
               setStatus({ ok: false, text: "导入失败:" + msg });
@@ -120,6 +125,38 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function importPromptText(query) {
+      return (
+        "请从 Claude Code 导入会话" +
+        (query ? " " + query : "(最近一个)") +
+        ":\n1. 先调用 claude_session_list 查看历史会话,确认目标会话 ID(已指定则跳过);\n" +
+        "2. 再调用 claude_session_import 导入(sessionId=..., format=seed);\n" +
+        "3. 把返回的续接上下文纳入本会话工作背景,并汇报:会话标题、项目、动过的文件、可能的未完成事项。"
+      );
+    }
+
+    /** Try to deliver text into a session via its conversation service. */
+    async function deliverToSession(sessions, id, text, attempts) {
+      for (var i = 0; i < attempts; i++) {
+        try {
+          var actx = sessions.scope(id);
+          if (actx !== void 0) {
+            var conversation = actx.get("conversation");
+            if (conversation !== void 0) {
+              await conversation.send(text);
+              return true;
+            }
+          }
+        } catch (e) {
+          // session not attached yet — retry below
+        }
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 400);
+        });
+      }
+      return false;
+    }
+
     function apply(ctx) {
       if (!ctx.slots || !ctx.sessions) return;
       ctx.slots.inject("conversation.input.dock", function () {
@@ -129,20 +166,31 @@ window.__ModuleLoader__.load({
           order: 20,
           locale: NS,
           inject: function (sessionId) {
-            var actx = ctx.sessions.scope(sessionId);
-            if (actx === void 0) throw new Error('claude-import dock: session "' + sessionId + '" resolved no scope');
-            var conversation = actx.get("conversation");
-            if (conversation === void 0) throw new Error("claude-import dock: conversation service unavailable");
+            var sessions = ctx.sessions;
             return {
               onImport: async function (query) {
-                var text =
-                  "请从 Claude Code 导入会话" +
-                  (query ? " " + query : "(最近一个)") +
-                  ":\n1. 先调用 claude_session_list 查看历史会话,确认目标会话 ID(已指定则跳过);\n" +
-                  "2. 再调用 claude_session_import 导入(sessionId=..., format=seed);\n" +
-                  "3. 把返回的续接上下文纳入本会话工作背景,并汇报:会话标题、项目、动过的文件、可能的未完成事项。";
-                await conversation.send(text);
-                return { ok: true };
+                // 1. current session's cwd becomes the new session's project dir
+                var cwd;
+                try {
+                  var binding = sessions.binding(sessionId);
+                  cwd = binding && binding.session ? binding.session.header.cwd : void 0;
+                } catch (e) {
+                  cwd = void 0;
+                }
+                // 2. create a NEW DSH session (blank), then open it
+                var createResult = await sessions.create(cwd === void 0 ? {} : { cwd: cwd });
+                if (!createResult || !createResult.ok) {
+                  var msg = createResult && createResult.error ? createResult.error.message : "未知错误";
+                  return { ok: false, error: { code: "session-create-failed", message: "创建新会话失败:" + msg, details: {} } };
+                }
+                var newId = createResult.value.sessionId;
+                sessions.open(newId);
+                // 3. deliver the import instruction into the new session
+                var delivered = await deliverToSession(sessions, newId, importPromptText(query), 12);
+                return {
+                  ok: true,
+                  value: { sessionId: newId, delivered: delivered },
+                };
               },
             };
           },
