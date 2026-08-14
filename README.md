@@ -22,6 +22,36 @@ pip install -e .            # 提供 claude-code-to-dsh 命令
 python -m claude_code_to_dsh list
 ```
 
+## DSH 插件(Web GUI 一键导入)
+
+`dsh-plugin/` 是一个 DeepSeek Harness 插件,把上面的能力直接搬进 DSH Web GUI:
+
+- **agent 工具**(host 半区):
+  - `claude_session_list` —— 列出 `~/.claude/projects` 下所有会话(ID/项目/标题/时间/统计)
+  - `claude_session_import` —— 导入指定会话,返回 seed 开场上下文或完整 markdown 续接文档
+- **Web UI**(client 半区):输入区上方新增「Claude 导入」dock —— 输入会话 ID(留空 = 最近一个),点击后自动向当前会话发起导入请求,agent 工具接管并汇报。
+
+安装(需要 pnpm,可用 `corepack enable pnpm` 启用):
+
+```bash
+cd ~/.dsh/profiles/web
+pnpm add /Users/ch/code/claude-code-to-dsh/dsh-plugin
+# 开发机:为插件的 peer 依赖建立软链(或把 @deepseek-ai/dsh-tools、@deepseek-ai/schemastery 装进 profile)
+mkdir -p /Users/ch/code/claude-code-to-dsh/dsh-plugin/node_modules/@deepseek-ai
+ln -s <dsh安装目录>/node_modules/@deepseek-ai/dsh-tools    /Users/ch/code/claude-code-to-dsh/dsh-plugin/node_modules/@deepseek-ai/dsh-tools
+ln -s <dsh安装目录>/node_modules/@deepseek-ai/schemastery /Users/ch/code/claude-code-to-dsh/dsh-plugin/node_modules/@deepseek-ai/schemastery
+```
+
+然后在 `~/.dsh/profiles/web/cordis.patch.yml` 注册:
+
+```yaml
+- insert:
+    - id: claude-import
+      name: 'dsh-plugin-claude-import'
+```
+
+**重启 dsh web 生效**(`dsh web` 无 dev watcher 时需重启进程;client 半区由 host 按需 serve,无需重建前端产物)。验证:`dsh --profile web --dump-config | grep claude` 应看到 `claude-import`。
+
 ## 用法
 
 ```bash
