@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-code-to-dsh"
+version = "0.1.0"
+description = "Extract continuable context from Claude Code session JSONL — summaries, file footprints, open threads — as markdown continuation docs or DSH session seeds."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["claude-code", "deepseek-harness", "dsh", "session", "context", "import"]
+
+[project.scripts]
+claude-code-to-dsh = "claude_code_to_dsh.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["claude_code_to_dsh*"]
