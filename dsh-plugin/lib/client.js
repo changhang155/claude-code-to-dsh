@@ -121,8 +121,7 @@ window.__ModuleLoader__.load({
     }
 
     function apply(ctx) {
-      var sessions = ctx.sessions;
-      if (!ctx.slots || !ctx.remote || !ctx.remote.sessions) return;
+      if (!ctx.slots || !ctx.sessions) return;
       ctx.slots.inject("conversation.input.dock", function () {
         return ctx.slots.register({
           name: "conversation.input.dock",
@@ -130,6 +129,10 @@ window.__ModuleLoader__.load({
           order: 20,
           locale: NS,
           inject: function (sessionId) {
+            var actx = ctx.sessions.scope(sessionId);
+            if (actx === void 0) throw new Error('claude-import dock: session "' + sessionId + '" resolved no scope');
+            var conversation = actx.get("conversation");
+            if (conversation === void 0) throw new Error("claude-import dock: conversation service unavailable");
             return {
               onImport: async function (query) {
                 var text =
@@ -138,11 +141,8 @@ window.__ModuleLoader__.load({
                   ":\n1. 先调用 claude_session_list 查看历史会话,确认目标会话 ID(已指定则跳过);\n" +
                   "2. 再调用 claude_session_import 导入(sessionId=..., format=seed);\n" +
                   "3. 把返回的续接上下文纳入本会话工作背景,并汇报:会话标题、项目、动过的文件、可能的未完成事项。";
-                return await ctx.remote.sessions.prompt({
-                  sessionId: sessionId,
-                  mode: "queue",
-                  content: [{ type: "text", text: text }],
-                });
+                await conversation.send(text);
+                return { ok: true };
               },
             };
           },
@@ -151,6 +151,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.ClaudeImportDock = ClaudeImportDock;
+    exports.inject = ["slots", "sessions"];
     exports.apply = apply;
     return module.exports;
   },
