@@ -24,14 +24,14 @@ python -m claude_code_to_dsh list
 
 ## DSH 插件(Web GUI 一键导入)
 
-`dsh-plugin/` 是一个 DeepSeek Harness 插件,把上面的能力直接搬进 DSH Web GUI:
+`dsh-plugin/` 是一个 DeepSeek Harness 插件,把上面的能力直接搬进 DSH Web GUI。它已抽成可独立发布的包 `dsh-plugin-claude-import`(本目录即其工作副本;包内声明了 `dsh.bundle`,支持 `dsh plugin --profile web add dsh-plugin-claude-import` 一键安装,详见包内 `README.md`):
 
 - **agent 工具**(host 半区):
   - `claude_session_list` —— 列出 `~/.claude/projects` 下所有会话(ID/项目/标题/时间/统计)
-  - `claude_session_import` —— 导入指定会话,返回 seed 开场上下文或完整 markdown 续接文档
-- **Web UI**(client 半区):输入区上方新增「Claude 导入」dock —— 输入会话 ID(留空 = 最近一个),点击后自动向当前会话发起导入请求,agent 工具接管并汇报。
+  - `claude_session_import` —— 导入指定会话,返回 seed 开场上下文或完整 markdown 续接文档;`createSession=true` 时在 Claude 会话所属项目目录新建 DSH 会话,并把上下文作为首条消息投递
+- **Web UI**(client 半区):会话头部新增「Claude 导入」入口 —— 输入会话 ID(留空 = 最近一个),自动新建并切换 DSH 会话,agent 工具接管并汇报。
 
-安装(需要 pnpm,可用 `corepack enable pnpm` 启用):
+本地开发时直接装本目录(需要 pnpm,可用 `corepack enable pnpm` 启用):
 
 ```bash
 cd ~/.dsh/profiles/web
@@ -108,8 +108,9 @@ python -m unittest discover -s tests -v
 
 ## 后续方向
 
-- 正式 DSH 插件化(`dsh plugin`):在 Web GUI 里一个入口完成 列表 → 挑选 → 播种 新会话。
-- `seed` 直接对接 DSH 的会话创建 API,而不是剪贴板粘贴。
+- ✅ 正式 DSH 插件化:Web GUI 一个入口完成 列表 → 挑选 → 播种 新会话(见上节 `dsh-plugin/`,已支持 `dsh plugin add` 安装)。
+- ✅ `seed` 直接对接 DSH 的会话创建 API:`claude_session_import` 的 `createSession=true` 会在 Claude 会话所属项目目录新建 DSH 会话并投递上下文,不再是剪贴板粘贴。
+- 插件发布:把 `dsh-plugin/` 推送到独立 GitHub 仓库并打上 `dsh-plugin` topic,发布 npm。
 
 ## License
 

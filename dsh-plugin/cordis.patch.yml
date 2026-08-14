@@ -1,0 +1,11 @@
+# dsh-plugin-claude-import — bundle patch layer.
+#
+# Inserts the plugin row that activates the host half (agent tools
+# claude_session_list / claude_session_import). The client half is picked up
+# by the dsh client runner through the package's `dsh.client` manifest and its
+# `./client` export — no extra row needed.
+#
+# Installed via:  dsh plugin --profile <name> add dsh-plugin-claude-import
+- insert:
+    - id: claude-import
+      name: 'dsh-plugin-claude-import'
