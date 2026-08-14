@@ -5,6 +5,7 @@
 
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import z from "@deepseek-ai/schemastery";
+import { InProcessApiClient, toFetchHandler } from "@deepseek-ai/dsh-host-apiproxy";
 import {
   defaultProjectsRoot,
   listSessionFiles,
@@ -292,32 +293,33 @@ function apply(ctx) {
         },
       };
       if (args.createSession) {
-        // Ensure the Claude project exists as a workspace, then create the new
-        // session inside it — that is what makes the project appear on the left.
-        const api = ctx.apiProxy;
-        const ws = await api.workspace.create({ path: info.projectDir });
-        if (!ws.ok) {
+        // Official API path: InProcessApiClient wraps the domain methods with
+        // the RPC envelope + schema validation (the raw ctx.apiProxy domain
+        // methods expect request envelopes, not bare payloads).
+        const client = new InProcessApiClient(toFetchHandler(ctx.apiProxy));
+        const ws = await client.workspace.create({ path: info.projectDir });
+        if (!ws.result.ok) {
           throw new Error(
-            `创建工作区失败(${info.projectDir}):${ws.error ? ws.error.message : "未知错误"}`
+            `创建工作区失败(${info.projectDir}):${ws.result.error ? ws.result.error.message : "未知错误"}`
           );
         }
-        const workspaceId = ws.value.workspace.workspaceId;
-        const created = await api.sessions.create({ workspaceId });
-        if (!created.ok) {
+        const workspaceId = ws.result.value.workspace.workspaceId;
+        const created = await client.sessions.create({ workspaceId });
+        if (!created.result.ok) {
           throw new Error(
-            `创建新会话失败(项目 ${info.projectDir}):${created.error ? created.error.message : "未知错误"}`
+            `创建新会话失败(项目 ${info.projectDir}):${created.result.error ? created.result.error.message : "未知错误"}`
           );
         }
-        const newId = created.value.sessionId;
+        const newId = created.result.value.sessionId;
         // Deliver the continuable context as the new session's first message.
         let delivered = false;
         try {
-          const prompted = await api.sessions.prompt({
+          const prompted = await client.sessions.prompt({
             sessionId: newId,
             mode: "queue",
             content: [{ type: "text", text }],
           });
-          delivered = !!(prompted && prompted.ok);
+          delivered = !!(prompted && prompted.result && prompted.result.ok);
         } catch (e) {
           delivered = false;
         }
