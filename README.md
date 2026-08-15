@@ -110,7 +110,7 @@ python -m unittest discover -s tests -v
 
 - ✅ 正式 DSH 插件化:Web GUI 一个入口完成 列表 → 挑选 → 播种 新会话(见上节 `dsh-plugin/`,已支持 `dsh plugin add` 安装)。
 - ✅ `seed` 直接对接 DSH 的会话创建 API:`claude_session_import` 的 `createSession=true` 会在 Claude 会话所属项目目录新建 DSH 会话并投递上下文,不再是剪贴板粘贴。
-- 插件发布:把 `dsh-plugin/` 推送到独立 GitHub 仓库并打上 `dsh-plugin` topic,发布 npm。
+- ✅ 插件发布:`dsh-plugin-claude-import` 已推送到独立仓库 [github.com/changhang155/dsh-plugin-claude-import](https://github.com/changhang155/dsh-plugin-claude-import) 并打上 `dsh-plugin` topic;npm 发布待 `npm login` 后执行 `npm publish`。
 
 ## License
 
